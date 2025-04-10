@@ -1,28 +1,30 @@
 version: 0.2
 
 phases:
-  install:
-    commands:
-      - echo Installing dependencies...
-
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 761018884488.dkr.ecr.us-east-1.amazonaws.com
+      - aws --version
+      - ACCOUNT_ID=761018884488
+      - REGION=us-east-1
+      - REPO_NAME=my-app
+      - IMAGE_TAG=latest
+      - aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
 
   build:
     commands:
-      - echo Building Docker image...
-      - docker build -t 761018884488.dkr.ecr.us-east-1.amazonaws.com/my-app:latest .
-      - docker tag 761018884488.dkr.ecr.us-east-1.amazonaws.com/my-app:latest 761018884488.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+      - echo Building the Docker image...
+      - docker build -t $REPO_NAME .
+      - docker tag $REPO_NAME:latest $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:$IMAGE_TAG
 
   post_build:
     commands:
-      - echo Pushing Docker image to ECR...
-      - docker push 761018884488.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
-      - echo Writing image definitions file...
-      - printf '[{"name":"my-app","imageUri":"761018884488.dkr.ecr.us-east-1.amazonaws.com/my-app:latest"}]' > imagedefinitions.json
-
-artifacts:
-  files:
-    - imagedefinitions.json
+      - echo Pushing the Docker image...
+      - docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:$IMAGE_TAG
+      - echo Updating ECS service...
+      - |
+        aws ecs update-service \
+          --cluster cp-ids-final-cluster \
+          --service cp-ids-final-service \
+          --force-new-deployment \
+          --region $REGION
